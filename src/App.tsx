@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 
 // --- CONFIGURATION ---
 const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_KEY; // We will set this in Step 4
-const MODEL = "google/gemini-3-pro-preview"; // Using Gemini 3 Pro model
-
+//const MODEL = "google/gemini-3-pro-preview"; // Using Gemini 3 Pro model
+//const MODEL = "minimax/minimax-m2"
+const MODEL = "google/gemini-2.5-flash-lite" // poco lirico, molto fattuale e semplice
+// ----------------------
 const SYSTEM_PROMPT = `
 ### Ruolo
 Sei un Esperto di Accessibilità Museale e Traduzione Sensoriale specializzato in descrizioni per non vedenti congeniti.
@@ -87,7 +89,7 @@ Applica le seguenti regole di trasformazione al testo di input:
 *   **Vocabolario Sensoriale:** Usa parole come *fragile, pesante, vuoto, affilato, vellutato, metallico, ritmico, stagnante, pungente, umido, vibrante*.
 
 ## 🚀 Compito
-Ricevi l'input dell'utente qui sotto. Rileva la lingua. Riscrivi il testo seguendo i protocolli di Traduzione Sensoriale in quella stessa lingua.
+Ricevi l'input dell'utente qui sotto. Rileva la lingua. Riscrivi il testo seguendo i protocolli di Traduzione Sensoriale in quella stessa lingua. Genera solo la risposta senza alcuna prefazione o spiegazione.
 `;
 
 function App() {
@@ -97,6 +99,36 @@ function App() {
   const [result, setResult] = useState<string>("");
   const [error, setError] = useState<string>("");
   const resultRef = useRef<HTMLHeadingElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setImage(event.target?.result as string);
+          setTextInput("");
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  };
 
   // Handle pasting images or text from clipboard
   useEffect(() => {
@@ -311,7 +343,15 @@ function App() {
       </header>
 
       {/* Input Area */}
-      <section aria-label="Area di input" className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-6 transition-all hover:shadow-md focus-within:ring-2 focus-within:ring-indigo-500">
+      <section
+        aria-label="Area di input"
+        className={`bg-white p-6 rounded-2xl shadow-sm border mb-6 transition-all hover:shadow-md focus-within:ring-2 focus-within:ring-indigo-500 ${
+          isDragging ? 'border-indigo-500 ring-2 ring-indigo-500 bg-indigo-50' : 'border-slate-200'
+        }`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         
         {/* Image Preview */}
         {image && (
@@ -367,10 +407,18 @@ function App() {
               onClick={generateDescription}
               disabled={loading}
               aria-busy={loading}
-              className={`px-8 py-3 rounded-full font-semibold text-white shadow-lg transition-all transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-offset-2
-                ${loading ? 'bg-slate-500 cursor-not-allowed' : 'bg-indigo-700 hover:bg-indigo-800'}`}
+              className={`px-8 py-3 rounded-full font-semibold text-white shadow-lg transition-all transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-offset-2 flex items-center justify-center gap-2
+                ${loading ? 'bg-indigo-500 cursor-wait' : 'bg-indigo-700 hover:bg-indigo-800'}`}
             >
-              {loading ? "Generazione in corso..." : (image ? "✨ Genera Descrizione Immagine" : "✨ Traduci Testo Sensorialmente")}
+              {loading ? (
+                <>
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Generazione in corso...
+                </>
+              ) : (image ? "✨ Genera Descrizione Immagine" : "✨ Traduci Testo Sensorialmente")}
             </button>
           </div>
         )}
