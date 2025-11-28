@@ -237,15 +237,57 @@ function App() {
         },
         body: JSON.stringify({
           model: MODEL,
-          messages: messages
+          messages: messages,
+          stream: true
         })
       });
 
-      const data = await response.json();
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || "Errore nella richiesta API");
+      }
+
+      if (!response.body) throw new Error("Nessun body nella risposta");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let done = false;
+      let accumulatedResult = "";
+      let buffer = "";
+
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        if (value) {
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          
+          for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) continue;
+
+            if (trimmedLine === "data: [DONE]") {
+              done = true;
+              break;
+            }
+            if (trimmedLine.startsWith("data: ")) {
+              try {
+                const json = JSON.parse(trimmedLine.replace("data: ", ""));
+                const content = json.choices[0]?.delta?.content || "";
+                if (content) {
+                  accumulatedResult += content;
+                  setResult(accumulatedResult);
+                }
+              } catch (e) {
+                console.error("Error parsing stream chunk", e);
+              }
+            }
+          }
+        }
+      }
       
-      if (data.error) throw new Error(data.error.message);
-      
-      setResult(data.choices[0].message.content);
       // Focus on result after a short delay to ensure rendering
       setTimeout(() => {
         resultRef.current?.focus();
